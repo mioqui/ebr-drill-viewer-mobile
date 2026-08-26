@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.1.1';
 const TIPOS = ['Bottom','Easer','Cut','Contour','Reaming','Casing'];
 const JUMBOS = {'125D114796':'JUMB001','125D98943':'JUMB002'};
 const FRONT_TYPES = new Set(['Bottom','Easer','Cut','Contour']);
@@ -314,6 +314,44 @@ function parseSection(plan){
   return {w,h,label:`${trimNum(w)} x ${trimNum(h)}`};
 }
 
+function cleanRockType(value){
+  let v=String(value || '').trim();
+  if (!v) return null;
+  v=v.replace(/^[\s:;=_/\-–—]+|[\s,;|.]+$/g,'').trim();
+  if (!v) return null;
+  // Normaliza separadores comunes sin limitar el valor a una lista fija.
+  v=v.replace(/\s*[–—_/]\s*/g,'-').replace(/\s*-\s*/g,'-');
+  // Casos compactos como IIIB / IVA, si vienen así en drill_plan.
+  const compact=v.match(/^(VIII|VII|VI|IV|III|II|IX|V|I|X)([A-Z])$/i);
+  if (compact) v=`${compact[1]}-${compact[2]}`;
+  return v.toUpperCase();
+}
+
+function parseRockType(plan){
+  const raw=String(plan || '').trim();
+  if (!raw) return null;
+
+  // 1) Si drill_plan trae una etiqueta explícita, aceptar el valor que venga
+  //    (por ejemplo: "Tipo de roca: III-B", "Rock type=IV-A", "Clase roca R3-B").
+  const labeled=raw.match(/(?:tipo\s*(?:de\s*)?roca|clase\s*(?:de\s*)?roca|rock\s*type|rock\s*class)\s*[:=\-_/]*\s*([A-Za-z0-9]+(?:\s*[\-–—_/]\s*[A-Za-z0-9]+)?)/i);
+  if (labeled) return cleanRockType(labeled[1]);
+
+  // 2) Formatos geomecánicos más comunes embebidos en el nombre del drill_plan:
+  //    III-A, III-B, IV-A, etc. No se restringe a esos ejemplos.
+  const roman=raw.match(/(?:^|[^A-Za-z0-9])((?:VIII|VII|VI|IV|III|II|IX|V|I|X)\s*[\-–—_/]\s*[A-Za-z0-9]+)(?=$|[^A-Za-z0-9])/i);
+  if (roman) return cleanRockType(roman[1]);
+
+  // 3) Variante con espacio: "III B".
+  const romanSpace=raw.match(/(?:^|[^A-Za-z0-9])((?:VIII|VII|VI|IV|III|II|IX|V|I|X)\s+([A-Za-z]))(?=$|[^A-Za-z0-9])/i);
+  if (romanSpace) return cleanRockType(romanSpace[1].replace(/\s+/,'-'));
+
+  // 4) Variante compacta: "IIIB", "IVA".
+  const compact=raw.match(/(?:^|[^A-Za-z0-9])((?:VIII|VII|VI|IV|III|II|IX|V|I|X)[A-Za-z])(?=$|[^A-Za-z0-9])/i);
+  if (compact) return cleanRockType(compact[1]);
+
+  return null;
+}
+
 function trimNum(v){
   return Number(v).toFixed(2).replace(/\.00$/,'').replace(/(\.\d)0$/,'$1');
 }
@@ -341,6 +379,7 @@ async function processZda(file){
   const metadata={
     Archivo:file.name, Rig:kv.rig, Numero_Serie:serie, Jumbo:identifyJumbo(serie), Ciclo:Number(kv.round),
     Fecha:zdaFmtDate(cycleTs), Hora_Navegacion:zdaFmtTime(navigationTs), Plan:kv.drill_plan || '-',
+    Tipo_Roca:parseRockType(kv.drill_plan),
     Labor:kv.tunnel_id || '-', Tabla_Curvas:kv.curve_table || '-', PEG:kv.peg || '-', Section:parseSection(kv.drill_plan)
   };
 
@@ -385,6 +424,7 @@ function renderResult(r){
   const metrics=[
     ['Serie',r.metadata.Numero_Serie],
     ['Sección',r.section?.label || '-'],
+    ['Tipo de roca',r.metadata.Tipo_Roca || 'No identificado'],
     ['Tipo de disparo',r.type],
     ['Barrenos',String(r.frontCount)],
     ['Metros perforados',`${fmt(r.totalMeters,2)} m`],
@@ -400,7 +440,7 @@ function renderResult(r){
   $('metrics').innerHTML=metrics.map(([k,v,cls='',size=''])=>`<div class="metric"><div class="k">${esc(k)}</div><div class="v ${cls} ${size}">${esc(v)}</div></div>`).join('');
 
   const details=[
-    ['Archivo',r.file.name],['Plan de perforación',r.metadata.Plan],['Labor / ID auxiliar',r.metadata.Labor],['Tabla de curvas',r.metadata.Tabla_Curvas],
+    ['Archivo',r.file.name],['Plan de perforación',r.metadata.Plan],['Tipo de roca',r.metadata.Tipo_Roca || 'No identificado'],['Labor / ID auxiliar',r.metadata.Labor],['Tabla de curvas',r.metadata.Tabla_Curvas],
     ['Barrenos ZDA totales',String(r.totalHoles)],['Barrenos de frente',String(r.frontCount)],['drilled_holes declarado',r.drilledDeclared==null?'-':String(r.drilledDeclared)],
     ['MWD válidos',String(r.mwd.validHoles)],['Intentos MWD cortos',String(r.mwd.shortAttempts)],['Muestras MWD',String(r.mwd.totalSamples)],
     ['Auto B1',r.counters.ok?`${r.counters.Auto_Brazo1_min} min`:'-'],['Manual B1',r.counters.ok?`${r.counters.Manual_Brazo1_min} min`:'-'],
@@ -415,6 +455,7 @@ function renderResult(r){
     <div>Conteo boom.dat vs drilled_holes: <strong class="${r.countOk?'':'warn'}">${r.countOk?'OK':'REVISAR'}</strong>.</div>
     <div>counters.dat: <strong class="${r.counters.ok?'':'warn'}">${r.counters.ok?'OK':esc(r.counters.motivo||'REVISAR')}</strong>.</div>
     <div>MWD: ${r.mwd.mwdNames.length} archivos · ${r.mwd.badLayouts} con layout no estándar.</div>
+    <div>Tipo de roca desde drill_plan: <strong class="${r.metadata.Tipo_Roca?'':'warn'}">${r.metadata.Tipo_Roca ? esc(r.metadata.Tipo_Roca) : 'No identificado'}</strong>.</div>
     <div>El plano mostrado es una reconstrucción referencial a partir de coordenadas X/Z de boom.dat; no es una captura del plano original del software del equipo.</div>`;
 
   canvasState.holes=r.holes;

@@ -1,4 +1,7 @@
-# EBR Drill Viewer v1.1.0 — iPhone, iPad y Android
+# EBR Drill Viewer v1.1.1 — iPhone, iPad y Android
+
+## Novedad v1.1.1
+Esta actualización agrega **Tipo de roca** al resumen del ciclo y al detalle. El valor se obtiene del campo `drill_plan` del ZDA y admite valores como `III-A`, `III-B`, `IV-A` o cualquier variante equivalente encontrada en el campo. Si no puede identificarse, la app muestra `No identificado` y conserva el `drill_plan` completo en el detalle para diagnóstico.
 
 ## Novedad v1.1
 Esta versión agrega, después del plano de navegación, el gráfico **Distribución de longitud perforada en roca por tipo de barreno**.
@@ -27,7 +30,7 @@ En el repositorio `ebr-drill-viewer-mobile`, reemplace los archivos de la versi�
 
 Es recomendable subir todo el contenido de la carpeta para mantener la versión sincronizada.
 
-Después espere a que **Actions → pages build and deployment** aparezca con check verde. Abra la URL de GitHub Pages y confirme que al pie se vea **v1.1.0**.
+Después espere a que **Actions → pages build and deployment** aparezca con check verde. Abra la URL de GitHub Pages y confirme que al pie se vea **v1.1.1**.
 
 Si el iPhone/iPad continúa mostrando la versión anterior, cierre por completo la PWA y Safari y vuelva a abrir. Si persiste, elimine el icono de la pantalla de inicio, abra de nuevo la URL en Safari y use **Compartir → Añadir a pantalla de inicio**.
 
