@@ -1,0 +1,4 @@
+EBR Drill Viewer
+Version: 1.0.0
+Target: iPhone / iPad PWA
+Mode: single ZDA, local/offline after installation

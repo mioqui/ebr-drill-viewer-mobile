@@ -1,0 +1,15 @@
+{
+  "name": "EBR Drill Viewer",
+  "short_name": "EBR Drill",
+  "description": "Visor móvil offline para analizar un archivo ZDA y reconstruir el plano de navegación.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f3f6f9",
+  "theme_color": "#1f4e78",
+  "icons": [
+    {"src":"icons/icon-192.png","sizes":"192x192","type":"image/png"},
+    {"src":"icons/icon-512.png","sizes":"512x512","type":"image/png"}
+  ]
+}

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=yes" />
+  <meta name="theme-color" content="#1f4e78" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="EBR Drill Viewer" />
+  <title>EBR Drill Viewer</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="brand">EBR Drill Viewer</div>
+      <div class="subtitle">Visor móvil de un ciclo ZDA</div>
+    </div>
+    <div id="offlineBadge" class="badge">Local</div>
+  </header>
+
+  <main class="wrap">
+    <section id="startCard" class="card hero">
+      <div class="heroIcon" aria-hidden="true">⌁</div>
+      <h1>Analizar archivo ZDA</h1>
+      <p>Seleccione un solo archivo del jumbo. El procesamiento se realiza en este iPhone o iPad; el archivo no se envía a un servidor.</p>
+      <label class="fileButton" for="zdaInput">Seleccionar ZDA</label>
+      <input id="zdaInput" type="file" accept=".zda,application/zip,application/x-zip-compressed" />
+      <div id="status" class="status">Listo para analizar.</div>
+    </section>
+
+    <section id="result" class="hidden">
+      <div class="cycleHeader card">
+        <div>
+          <div id="cycleTitle" class="cycleTitle">-</div>
+          <div id="cycleSub" class="cycleSub">-</div>
+        </div>
+        <button id="newFileBtn" class="secondaryBtn" type="button">Otro ZDA</button>
+      </div>
+
+      <div id="metrics" class="metrics"></div>
+
+      <section class="card navCard">
+        <div class="sectionTitleRow">
+          <div>
+            <h2>Plano de navegación</h2>
+            <div id="navCaption" class="muted">Plano referencial reconstruido desde ZDA</div>
+          </div>
+          <button id="fullBtn" class="iconBtn" type="button" title="Pantalla completa" aria-label="Pantalla completa">⛶</button>
+        </div>
+
+        <div class="toolbar">
+          <label><input id="toggleLabels" type="checkbox" /> IDs</label>
+          <label><input id="toggleSegments" type="checkbox" checked /> Dirección</label>
+          <label><input id="toggleContour" type="checkbox" checked /> Sección</label>
+        </div>
+
+        <div id="canvasWrap" class="canvasWrap">
+          <canvas id="navCanvas"></canvas>
+        </div>
+        <div id="holeInfo" class="holeInfo">Toque un barreno para ver su detalle.</div>
+      </section>
+
+      <section class="card">
+        <h2>Detalle del ciclo</h2>
+        <div id="detailGrid" class="detailGrid"></div>
+      </section>
+
+      <details class="card diagCard">
+        <summary>Diagnóstico de lectura</summary>
+        <div id="diagnostic" class="diagnostic"></div>
+      </details>
+    </section>
+
+    <footer>
+      <span>EBR Drill Viewer · PWA offline</span>
+      <span id="version">v1.0.0</span>
+    </footer>
+  </main>
+
+  <script src="jszip.min.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
+    }
+  </script>
+</body>
+</html>
