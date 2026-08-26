@@ -1,4 +1,4 @@
-const CACHE = 'ebr-drill-viewer-v1.0.0';
+const CACHE = 'ebr-drill-viewer-v1.0.1';
 const ASSETS = [
   './',
   './index.html',

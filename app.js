@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 const TIPOS = ['Bottom','Easer','Cut','Contour','Reaming','Casing'];
 const JUMBOS = {'125D114796':'JUMB001','125D98943':'JUMB002'};
 const FRONT_TYPES = new Set(['Bottom','Easer','Cut','Contour']);
@@ -61,15 +61,18 @@ function resetUI(){
 }
 
 async function handleFile(file){
-  if (!/\.zda$/i.test(file.name)) {
-    setStatus('Seleccione un archivo con extensión .ZDA.', 'error');
+  // En iOS/iPadOS la extensión .ZDA no tiene un MIME reconocido por el selector
+  // de Archivos. Por eso no filtramos por extensión: dejamos elegir el archivo
+  // y validamos su estructura interna como ZDA/ZIP.
+  if (!file || file.size === 0) {
+    setStatus('El archivo seleccionado está vacío o no se pudo leer.', 'error');
     return;
   }
   if (typeof JSZip === 'undefined') {
     setStatus('No se pudo cargar el lector ZIP local.', 'error');
     return;
   }
-  setStatus(`Analizando ${file.name}…`, 'busy');
+  setStatus(`Analizando ${file.name || 'archivo'}…`, 'busy');
   try {
     const result = await processZda(file);
     current = result;
@@ -77,7 +80,12 @@ async function handleFile(file){
     setStatus('Análisis completado.');
   } catch (err) {
     console.error(err);
-    setStatus(`No se pudo analizar el ZDA: ${err?.message || err}`, 'error');
+    const msg = err?.message || String(err);
+    if (/zip|central directory|end of data|corrupt/i.test(msg)) {
+      setStatus('El archivo seleccionado no tiene una estructura ZDA válida o no pudo abrirse como contenedor ZIP.', 'error');
+    } else {
+      setStatus(`No se pudo analizar el ZDA: ${msg}`, 'error');
+    }
   }
 }
 
