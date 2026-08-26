@@ -26,7 +26,7 @@
     <section id="startCard" class="card hero">
       <div class="heroIcon" aria-hidden="true">⌁</div>
       <h1>Analizar archivo ZDA</h1>
-      <p>Seleccione un solo archivo del jumbo. El procesamiento se realiza en este iPhone o iPad; el archivo no se envía a un servidor.</p>
+      <p>Seleccione un solo archivo del jumbo. El procesamiento se realiza en este iPhone, iPad o equipo Android; el archivo no se envía a un servidor.</p>
       <label class="fileButton" for="zdaInput">Seleccionar ZDA</label>
       <input id="zdaInput" type="file" />
       <div id="status" class="status">Listo para analizar.</div>
@@ -43,7 +43,7 @@
 
       <div id="metrics" class="metrics"></div>
 
-      <section class="card navCard">
+      <section id="navCard" class="card navCard">
         <div class="sectionTitleRow">
           <div>
             <h2>Plano de navegación</h2>
@@ -64,6 +64,25 @@
         <div id="holeInfo" class="holeInfo">Toque un barreno para ver su detalle.</div>
       </section>
 
+
+      <section id="boxPlotCard" class="card boxCard">
+        <div class="sectionTitleRow">
+          <div>
+            <h2>Distribución de longitud perforada</h2>
+            <div id="boxCaption" class="muted">Longitud perforada en roca por tipo de barreno</div>
+          </div>
+          <button id="boxFullBtn" class="iconBtn" type="button" title="Pantalla completa" aria-label="Pantalla completa">⛶</button>
+        </div>
+
+        <div id="boxPlotScroll" class="boxPlotScroll">
+          <div id="boxPlotWrap" class="boxPlotWrap">
+            <canvas id="boxCanvas"></canvas>
+          </div>
+        </div>
+        <div class="chartHint">En teléfono puede deslizar horizontalmente. Para verlo mejor, use ⛶ o gire el equipo.</div>
+        <div id="boxInfo" class="holeInfo">Toque un punto para ver el barreno y su longitud.</div>
+      </section>
+
       <section class="card">
         <h2>Detalle del ciclo</h2>
         <div id="detailGrid" class="detailGrid"></div>
@@ -77,7 +96,7 @@
 
     <footer>
       <span>EBR Drill Viewer · PWA offline</span>
-      <span id="version">v1.0.0</span>
+      <span id="version">v1.1.0</span>
     </footer>
   </main>
 

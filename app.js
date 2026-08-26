@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.1.0';
 const TIPOS = ['Bottom','Easer','Cut','Contour','Reaming','Casing'];
 const JUMBOS = {'125D114796':'JUMB001','125D98943':'JUMB002'};
 const FRONT_TYPES = new Set(['Bottom','Easer','Cut','Contour']);
@@ -11,6 +11,7 @@ const pct = (a,b) => (a == null || b == null || b <= 0) ? null : (a/b)*100;
 
 let current = null;
 let canvasState = {holes:[], section:null, labels:false, segments:true, contour:true, transform:null};
+let boxState = {groups:[], points:[], transform:null};
 
 $('version').textContent = `v${APP_VERSION}`;
 window.addEventListener('online', updateNetBadge);
@@ -26,20 +27,51 @@ $('newFileBtn').addEventListener('click', resetUI);
 $('toggleLabels').addEventListener('change', e => { canvasState.labels = e.target.checked; drawNavigation(); });
 $('toggleSegments').addEventListener('change', e => { canvasState.segments = e.target.checked; drawNavigation(); });
 $('toggleContour').addEventListener('change', e => { canvasState.contour = e.target.checked; drawNavigation(); });
-$('fullBtn').addEventListener('click', async () => {
-  const el = $('canvasWrap');
-  try {
-    if (!document.fullscreenElement) await el.requestFullscreen?.();
-    else await document.exitFullscreen?.();
-  } catch (_) {}
-  setTimeout(drawNavigation,120);
+$('fullBtn').addEventListener('click', () => toggleCardFullscreen('navCard', drawNavigation));
+$('boxFullBtn').addEventListener('click', () => toggleCardFullscreen('boxPlotCard', drawBoxPlot));
+document.addEventListener('fullscreenchange', () => {
+  setTimeout(() => {
+    if (current) { drawNavigation(); drawBoxPlot(); }
+  }, 100);
 });
-document.addEventListener('fullscreenchange', () => setTimeout(drawNavigation,80));
-window.addEventListener('resize', () => current && drawNavigation());
+window.addEventListener('resize', () => {
+  if (current) { drawNavigation(); drawBoxPlot(); }
+});
 $('navCanvas').addEventListener('pointerup', onCanvasTap);
+$('boxCanvas').addEventListener('pointerup', onBoxTap);
 
 function updateNetBadge(){
   $('offlineBadge').textContent = navigator.onLine ? 'Local' : 'Offline';
+}
+
+async function toggleCardFullscreen(cardId, redraw){
+  const el=$(cardId);
+  if (!el) return;
+
+  // Si el navegador soporta Fullscreen API, la usamos. En algunos iPhone/iPad
+  // la PWA puede no ofrecerla para elementos HTML; allí usamos un modo visual
+  // de pantalla completa como respaldo.
+  if (document.fullscreenElement) {
+    try { await document.exitFullscreen(); } catch (_) {}
+    return;
+  }
+  if (el.classList.contains('pseudoFullscreen')) {
+    el.classList.remove('pseudoFullscreen');
+    document.body.classList.remove('lockScroll');
+    setTimeout(redraw,80);
+    return;
+  }
+  if (typeof el.requestFullscreen === 'function') {
+    try {
+      await el.requestFullscreen();
+      setTimeout(redraw,100);
+      return;
+    } catch (_) {}
+  }
+  document.querySelectorAll('.pseudoFullscreen').forEach(x=>x.classList.remove('pseudoFullscreen'));
+  el.classList.add('pseudoFullscreen');
+  document.body.classList.add('lockScroll');
+  setTimeout(redraw,80);
 }
 
 function setStatus(text, cls=''){
@@ -50,6 +82,7 @@ function setStatus(text, cls=''){
 function resetUI(){
   current = null;
   canvasState = {holes:[], section:null, labels:false, segments:true, contour:true, transform:null};
+  boxState = {groups:[], points:[], transform:null};
   $('zdaInput').value = '';
   $('startCard').classList.remove('hidden');
   $('result').classList.add('hidden');
@@ -346,6 +379,7 @@ function renderResult(r){
   $('cycleTitle').textContent=`${r.metadata.Jumbo} · Ciclo ${r.metadata.Ciclo}`;
   $('cycleSub').textContent=`${r.metadata.Fecha || '-'} · ${r.metadata.Plan || '-'}`;
   $('navCaption').textContent=`Plano referencial reconstruido desde ZDA${r.section?` · sección ${r.section.label}`:''}`;
+  $('boxCaption').textContent=`${r.metadata.Jumbo} · Serie ${r.metadata.Numero_Serie} · Ciclo ${r.metadata.Ciclo} · ${r.metadata.Fecha || '-'}`;
 
   const c=r.counters;
   const metrics=[
@@ -385,9 +419,199 @@ function renderResult(r){
 
   canvasState.holes=r.holes;
   canvasState.section=r.section;
+  boxState.groups=buildBoxGroups(r.holes);
   drawNavigation();
+  drawBoxPlot();
   $('holeInfo').textContent='Toque un barreno para ver su detalle.';
+  $('boxInfo').textContent='Toque un punto para ver el barreno y su longitud.';
   window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function percentile(sorted,p){
+  if (!sorted.length) return null;
+  if (sorted.length===1) return sorted[0];
+  const pos=(sorted.length-1)*p;
+  const lo=Math.floor(pos), hi=Math.ceil(pos), f=pos-lo;
+  return sorted[lo]*(1-f)+sorted[hi]*f;
+}
+
+function statsFor(values){
+  const v=values.filter(Number.isFinite).slice().sort((a,b)=>a-b);
+  if (!v.length) return null;
+  const mean=v.reduce((a,b)=>a+b,0)/v.length;
+  return {
+    n:v.length, values:v, min:v[0], q1:percentile(v,.25), median:percentile(v,.5),
+    q3:percentile(v,.75), max:v[v.length-1], mean
+  };
+}
+
+function buildBoxGroups(holes){
+  return TIPOS.map(tipo=>{
+    const items=holes.filter(h=>h.Tipo===tipo && Number.isFinite(Number(h.Longitud_roca_m)) && Number(h.Longitud_roca_m)>0)
+      .map(h=>({hole:h,value:Number(h.Longitud_roca_m)}));
+    const stats=statsFor(items.map(x=>x.value));
+    return stats ? {tipo,items,stats} : null;
+  }).filter(Boolean);
+}
+
+function niceStep(range){
+  if (range<=1.25) return .25;
+  if (range<=2.5) return .5;
+  if (range<=5) return 1;
+  return 2;
+}
+
+function boxDomain(groups){
+  const vals=groups.flatMap(g=>g.items.map(x=>x.value)).filter(Number.isFinite);
+  if (!vals.length) return {ymin:0,ymax:5,step:1};
+  let min=Math.min(...vals), max=Math.max(...vals);
+  let range=Math.max(max-min,.5);
+  const step=niceStep(range);
+  let ymin=Math.floor((min-step*.55)/step)*step;
+  let ymax=Math.ceil((max+step*.55)/step)*step;
+  if (ymax-ymin<step*3) {
+    const mid=(ymax+ymin)/2;
+    ymin=Math.floor((mid-step*1.75)/step)*step;
+    ymax=Math.ceil((mid+step*1.75)/step)*step;
+  }
+  ymin=Math.max(0,ymin);
+  return {ymin,ymax,step};
+}
+
+function setupBoxCanvas(){
+  const canvas=$('boxCanvas'), wrap=$('boxPlotWrap'), scroll=$('boxPlotScroll');
+  const isExpanded=document.fullscreenElement===$('boxPlotCard') || $('boxPlotCard').classList.contains('pseudoFullscreen');
+  const viewport=Math.max(300,Math.floor(scroll.getBoundingClientRect().width));
+  const natural=Math.max(690,boxState.groups.length*145+95);
+  const cssW=isExpanded ? Math.max(320,Math.floor(wrap.getBoundingClientRect().width || viewport)) : Math.max(viewport,natural);
+  const cssH=isExpanded ? Math.max(390,Math.floor(wrap.getBoundingClientRect().height || (window.innerHeight-145))) : 475;
+  wrap.style.width=isExpanded?'100%':`${cssW}px`;
+  canvas.style.width=`${cssW}px`; canvas.style.height=`${cssH}px`;
+  const dpr=Math.min(window.devicePixelRatio||1,3);
+  canvas.width=Math.floor(cssW*dpr); canvas.height=Math.floor(cssH*dpr);
+  const ctx=canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {canvas,ctx,w:cssW,h:cssH};
+}
+
+function jitterFromKey(key,index){
+  const str=String(key ?? index);
+  let h=2166136261;
+  for (let i=0;i<str.length;i++) { h^=str.charCodeAt(i); h=Math.imul(h,16777619); }
+  const u=((h>>>0)%10000)/9999;
+  return u*2-1;
+}
+
+function drawBoxPlot(){
+  if (!current || !boxState.groups.length) return;
+  const {ctx,w,h}=setupBoxCanvas();
+  ctx.clearRect(0,0,w,h); ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h);
+
+  const groups=boxState.groups;
+  const domain=boxDomain(groups);
+  const margin={l:58,r:18,t:82,b:70};
+  const pw=w-margin.l-margin.r, ph=h-margin.t-margin.b;
+  const Y=v=>margin.t+(domain.ymax-v)/(domain.ymax-domain.ymin)*ph;
+  const groupW=pw/groups.length;
+  const X=i=>margin.l+groupW*(i+.5);
+  boxState.points=[];
+  boxState.transform={X,Y,groupW,margin,domain,w,h};
+
+  // Título y subtítulo dentro del gráfico, para que también aparezcan en pantalla completa.
+  ctx.fillStyle='#20262d'; ctx.textAlign='center'; ctx.font='600 15px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Distribución de longitud perforada en roca por tipo de barreno',w/2,22);
+  ctx.font='600 12px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText(`${current.metadata.Jumbo} | Serie ${current.metadata.Numero_Serie} | Ciclo ${current.metadata.Ciclo} | ${current.metadata.Fecha || '-'}`,w/2,41);
+
+  // Eje y y grilla.
+  ctx.textAlign='right'; ctx.font='10px -apple-system, sans-serif';
+  for (let v=domain.ymin;v<=domain.ymax+1e-9;v+=domain.step){
+    const y=Y(v);
+    ctx.strokeStyle='#e0e5ea'; ctx.lineWidth=.8; ctx.beginPath();ctx.moveTo(margin.l,y);ctx.lineTo(w-margin.r,y);ctx.stroke();
+    ctx.fillStyle='#4c5966'; ctx.fillText(v.toFixed(domain.step<1?2:1),margin.l-7,y+3.5);
+  }
+  ctx.strokeStyle='#333';ctx.lineWidth=1.15;ctx.beginPath();ctx.moveTo(margin.l,margin.t);ctx.lineTo(margin.l,h-margin.b);ctx.lineTo(w-margin.r,h-margin.b);ctx.stroke();
+
+  ctx.save(); ctx.translate(16,margin.t+ph/2); ctx.rotate(-Math.PI/2); ctx.textAlign='center';ctx.fillStyle='#28333d';ctx.font='600 11px -apple-system, sans-serif';ctx.fillText('Longitud perforada en roca (m)',0,0);ctx.restore();
+
+  groups.forEach((g,i)=>{
+    const x=X(i), bw=Math.min(78,groupW*.55), cap=Math.min(46,bw*.68), s=g.stats;
+
+    // Texto estadístico superior por grupo.
+    ctx.textAlign='center';ctx.fillStyle='#2f3841';ctx.font='10.5px -apple-system, sans-serif';
+    ctx.fillText(`Min ${fmt(s.min,2)} | Máx ${fmt(s.max,2)}`,x,58);
+    ctx.fillText(`Prom ${fmt(s.mean,2)} | Med ${fmt(s.median,2)}`,x,71);
+
+    // Bigotes = mínimo y máximo real.
+    ctx.strokeStyle='#2d3339';ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.moveTo(x,Y(s.min));ctx.lineTo(x,Y(s.max));ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x-cap/2,Y(s.min));ctx.lineTo(x+cap/2,Y(s.min));ctx.moveTo(x-cap/2,Y(s.max));ctx.lineTo(x+cap/2,Y(s.max));ctx.stroke();
+
+    // Caja Q1-Q3. Si n=1 o Q1=Q3, dejamos una línea compacta visible.
+    const yQ1=Y(s.q1), yQ3=Y(s.q3), top=Math.min(yQ1,yQ3), bh=Math.abs(yQ1-yQ3);
+    ctx.strokeStyle='#2d3339';ctx.lineWidth=1.4;ctx.fillStyle='rgba(255,255,255,.88)';
+    if (bh<1.5) {
+      ctx.beginPath();ctx.moveTo(x-bw/2,Y(s.median));ctx.lineTo(x+bw/2,Y(s.median));ctx.stroke();
+    } else {
+      ctx.fillRect(x-bw/2,top,bw,bh);ctx.strokeRect(x-bw/2,top,bw,bh);
+    }
+
+    // Mediana.
+    ctx.strokeStyle='#ff7f0e';ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(x-bw/2,Y(s.median));ctx.lineTo(x+bw/2,Y(s.median));ctx.stroke();
+
+    // Puntos individuales con jitter determinista.
+    g.items.forEach((item,j)=>{
+      const jitter=jitterFromKey(item.hole.ID,j)*bw*.34;
+      const px=x+jitter, py=Y(item.value);
+      ctx.beginPath();ctx.arc(px,py,4.1,0,Math.PI*2);ctx.fillStyle='rgba(46,91,67,.78)';ctx.fill();
+      ctx.strokeStyle='rgba(33,66,49,.48)';ctx.lineWidth=.55;ctx.stroke();
+      boxState.points.push({x:px,y:py,item,group:g});
+    });
+
+    // Etiquetas de categoría.
+    ctx.fillStyle='#313b45';ctx.textAlign='center';ctx.font='600 11px -apple-system, sans-serif';
+    ctx.fillText(g.tipo,x,h-margin.b+22);
+    ctx.font='10.5px -apple-system, sans-serif';ctx.fillText(`(n=${s.n})`,x,h-margin.b+38);
+  });
+
+  // Leyenda compacta.
+  if (w>=650) drawBoxLegend(ctx,margin.l+8,h-margin.b-68);
+}
+
+function drawBoxLegend(ctx,x,y){
+  const W=236,H=61;
+  ctx.fillStyle='rgba(255,255,255,.94)';ctx.strokeStyle='#cfd6dd';ctx.lineWidth=1;ctx.fillRect(x,y,W,H);ctx.strokeRect(x,y,W,H);
+  ctx.font='9.5px -apple-system, sans-serif';ctx.textAlign='left';ctx.fillStyle='#3f4a54';
+  ctx.beginPath();ctx.arc(x+12,y+14,3.7,0,Math.PI*2);ctx.fillStyle='rgba(46,91,67,.78)';ctx.fill();ctx.fillStyle='#3f4a54';ctx.fillText('Punto: valor de cada barreno',x+22,y+17);
+  ctx.strokeStyle='#2d3339';ctx.strokeRect(x+7,y+25,12,8);ctx.fillText('Caja: 50% central (Q1–Q3)',x+22,y+33);
+  ctx.strokeStyle='#ff7f0e';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+7,y+43);ctx.lineTo(x+19,y+43);ctx.stroke();ctx.fillStyle='#3f4a54';ctx.fillText('Mediana',x+22,y+46);
+  ctx.strokeStyle='#2d3339';ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(x+7,y+54);ctx.lineTo(x+19,y+54);ctx.stroke();ctx.fillStyle='#3f4a54';ctx.fillText('Bigotes: mínimo y máximo real',x+22,y+57);
+}
+
+function onBoxTap(e){
+  if (!boxState.transform || !boxState.groups.length) return;
+  const canvas=$('boxCanvas'), rect=canvas.getBoundingClientRect();
+  const scaleX=canvasStateDummyScale(rect.width,boxState.transform.w), scaleY=canvasStateDummyScale(rect.height,boxState.transform.h);
+  const px=(e.clientX-rect.left)/scaleX, py=(e.clientY-rect.top)/scaleY;
+  let best=null,bestD=Infinity;
+  for (const p of boxState.points){
+    const d=Math.hypot(p.x-px,p.y-py);
+    if (d<bestD){bestD=d;best=p;}
+  }
+  if (best && bestD<=18){
+    const h=best.item.hole;
+    $('boxInfo').innerHTML=`<strong>${esc(h.ID)}</strong> · ${esc(h.Tipo)} · Brazo ${h.Boom} · Sec. ${h.Secuencia} · <strong>${fmt(best.item.value,2)} m</strong>`;
+    return;
+  }
+  const {margin,groupW}=boxState.transform;
+  const idx=Math.floor((px-margin.l)/groupW);
+  if (idx>=0 && idx<boxState.groups.length){
+    const g=boxState.groups[idx],s=g.stats;
+    $('boxInfo').innerHTML=`<strong>${esc(g.tipo)}</strong> · n=${s.n} · Min ${fmt(s.min,2)} · Q1 ${fmt(s.q1,2)} · Med ${fmt(s.median,2)} · Q3 ${fmt(s.q3,2)} · Máx ${fmt(s.max,2)} · Prom ${fmt(s.mean,2)} m`;
+  }
+}
+
+function canvasStateDummyScale(display,internalCss){
+  return internalCss>0 ? display/internalCss : 1;
 }
 
 function esc(s){

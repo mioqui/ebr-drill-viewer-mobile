@@ -1,7 +1,7 @@
 {
   "name": "EBR Drill Viewer",
   "short_name": "EBR Drill",
-  "description": "Visor móvil offline para analizar un archivo ZDA y reconstruir el plano de navegación.",
+  "description": "Visor móvil offline para analizar un archivo ZDA, reconstruir el plano de navegación y visualizar boxplots por tipo de barreno.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
