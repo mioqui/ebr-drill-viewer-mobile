@@ -1,0 +1,16 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.ebr.drillviewer'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.ebr.drillviewer'
+        minSdk 24
+        targetSdk 34
+        versionCode 111
+        versionName '1.1.1'
+    }
+}
