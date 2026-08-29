@@ -8,9 +8,19 @@ android {
 
     defaultConfig {
         applicationId 'com.ebr.drillviewer'
-        minSdk 24
+        minSdk 21
         targetSdk 34
-        versionCode 111
-        versionName '1.1.1'
+        versionCode 112
+        versionName '1.1.2'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            // Pilot release: signed with the Android debug key so it can be
+            // installed directly without Play Store while remaining non-debuggable.
+            signingConfig signingConfigs.debug
+        }
     }
 }
