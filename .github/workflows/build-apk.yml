@@ -43,22 +43,22 @@ jobs:
           cp manifest.webmanifest android/app/src/main/assets/
           cp service-worker.js android/app/src/main/assets/
           if [ -d icons ]; then cp -R icons android/app/src/main/assets/; fi
+          sed -i 's/v1\.1\.1/v1.1.3/g' android/app/src/main/assets/index.html
 
-      - name: Build release APK
+      - name: Build unsigned release APK
         run: gradle -p android :app:assembleRelease --stacktrace
 
-      - name: Verify APK alignment and signature
+      - name: Align unsigned APK
         run: |
-          APK=android/app/build/outputs/apk/release/app-release.apk
-          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -c -v 4 "$APK"
-          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$APK"
+          IN=android/app/build/outputs/apk/release/app-release-unsigned.apk
+          OUT=EBR_Drill_Viewer_v1.1.3_UNSIGNED_ALIGNED.apk
+          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -f -p 4 "$IN" "$OUT"
+          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -c -v 4 "$OUT"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$OUT" | head -n 2
 
-      - name: Rename release APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk EBR_Drill_Viewer_v1.1.2_RELEASE.apk
-
-      - name: Upload release APK artifact
+      - name: Upload unsigned aligned APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EBR_Drill_Viewer_v1.1.2_RELEASE_APK
-          path: EBR_Drill_Viewer_v1.1.2_RELEASE.apk
+          name: EBR_Drill_Viewer_v1.1.3_UNSIGNED_ALIGNED
+          path: EBR_Drill_Viewer_v1.1.3_UNSIGNED_ALIGNED.apk
           if-no-files-found: error
