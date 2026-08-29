@@ -27,7 +27,7 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Install Android SDK 34
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install required Android packages
@@ -44,15 +44,21 @@ jobs:
           cp service-worker.js android/app/src/main/assets/
           if [ -d icons ]; then cp -R icons android/app/src/main/assets/; fi
 
-      - name: Build debug APK
-        run: gradle -p android :app:assembleDebug --stacktrace
+      - name: Build release APK
+        run: gradle -p android :app:assembleRelease --stacktrace
 
-      - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk EBR_Drill_Viewer_v1.1.1.apk
+      - name: Verify APK alignment and signature
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -c -v 4 "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$APK"
 
-      - name: Upload APK artifact
+      - name: Rename release APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk EBR_Drill_Viewer_v1.1.2_RELEASE.apk
+
+      - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EBR_Drill_Viewer_v1.1.1_APK
-          path: EBR_Drill_Viewer_v1.1.1.apk
+          name: EBR_Drill_Viewer_v1.1.2_RELEASE_APK
+          path: EBR_Drill_Viewer_v1.1.2_RELEASE.apk
           if-no-files-found: error
