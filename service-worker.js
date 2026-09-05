@@ -1,9 +1,10 @@
-const CACHE = 'ebr-drill-viewer-v1.1.1';
+const CACHE = 'ebr-drill-viewer-v1.1.1-op1';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './operator-addon.js',
   './jszip.min.js',
   './manifest.webmanifest',
   './icons/apple-touch-icon.png',
